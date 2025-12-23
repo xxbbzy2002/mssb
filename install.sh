@@ -1552,13 +1552,97 @@ modify_filebrowser_config() {
     fi
 }
 
+# 修改订阅链接
+modify_sub_urls() {
+    echo -e "\n${green_text}=== 修改订阅链接 ===${reset}"
+    
+    # 显示当前订阅链接
+    echo -e "${yellow}当前订阅链接：${reset}"
+    if [ -n "$sub_urls" ]; then
+        echo -e "${green_text}$sub_urls${reset}"
+    else
+        echo -e "${red}未设置订阅链接${reset}"
+    fi
+    
+    # 显示当前核心类型
+    echo -e "\n${yellow}当前代理核心：${core_name:-未设置}${reset}"
+    
+    # 输入新订阅链接
+    echo -e "\n${yellow}订阅格式说明：${reset}"
+    echo -e "  1. 只输入链接（多个用空格分隔）：https://a.com https://b.com"
+    echo -e "  2. 带标签格式：机场A|https://a.com 机场B|https://b.com"
+    echo -e "${green_text}-------------------------------------------------${reset}"
+    read -p "请输入新的订阅链接（直接回车保持不变）: " new_sub_urls
+    
+    # 如果输入为空，保持原有设置
+    if [ -z "$new_sub_urls" ]; then
+        echo -e "${yellow}未输入新订阅，保持原有设置${reset}"
+        return 0
+    fi
+    
+    # 更新变量
+    sub_urls="$new_sub_urls"
+    
+    # 更新env文件
+    local env_file="/mssb/mssb.env"
+    if [ -f "$env_file" ]; then
+        if grep -q "^sub_urls=" "$env_file" 2>/dev/null; then
+            # 使用 | 作为分隔符避免 URL 中的特殊字符问题
+            sed -i "s|^sub_urls=.*|sub_urls=\"$sub_urls\"|" "$env_file"
+        else
+            echo "sub_urls=\"$sub_urls\"" >> "$env_file"
+        fi
+        echo -e "${green_text}✅ 订阅链接已保存到 env 文件${reset}"
+    fi
+    
+    # 应用到配置文件
+    echo -e "\n${yellow}正在应用订阅到配置文件...${reset}"
+    cd "$(dirname "$0")"
+    
+    if [ "$core_name" = "sing-box" ]; then
+        # Sing-box 使用 update_sub.py
+        if echo "$sub_urls" | grep -q '|'; then
+            python3 update_sub.py -v "$sub_urls"
+        else
+            # 没有tag，自动生成tag
+            new_sub_urls=""
+            index=1
+            for url in $sub_urls; do
+                new_sub_urls+="✈️机场${index}|${url} "
+                index=$((index+1))
+            done
+            python3 update_sub.py -v "${new_sub_urls% }"
+        fi
+        echo -e "${green_text}✅ 订阅已应用到 Sing-box 配置${reset}"
+    elif [ "$core_name" = "mihomo" ]; then
+        # Mihomo 使用 yq
+        read -ra arr <<< "$sub_urls"
+        edit_mihomo_proxy_providers "${arr[@]}"
+        echo -e "${green_text}✅ 订阅已应用到 Mihomo 配置${reset}"
+    else
+        echo -e "${yellow}⚠️ 未检测到核心类型，订阅已保存但未应用到配置文件${reset}"
+        echo -e "${yellow}请重新运行选项1安装服务以应用订阅${reset}"
+        return 0
+    fi
+    
+    # 询问是否重启服务
+    read -p "是否立即重启服务使订阅生效？(y/n): " restart_choice
+    if [ "$restart_choice" = "y" ]; then
+        supervisorctl restart all
+        echo -e "${green_text}✅ 服务已重启${reset}"
+    else
+        echo -e "${yellow}请稍后手动重启服务使订阅生效${reset}"
+    fi
+}
+
 # 修改服务配置
 modify_service_config() {
     echo -e "\n${green_text}请选择要修改的配置(成功后会更新env文件)：${reset}"
     echo -e "${green_text}1) 修改 Supervisor 管理界面配置${reset}"
     echo -e "${green_text}2) 修改 Filebrowser 登录方式${reset}"
+    echo -e "${green_text}3) 修改订阅链接${reset}"
     echo -e "${green_text}-------------------------------------------------${reset}"
-    read -p "请输入选项 (1/2): " config_choice
+    read -p "请输入选项 (1/2/3): " config_choice
 
     case $config_choice in
         1)
@@ -1566,6 +1650,9 @@ modify_service_config() {
             ;;
         2)
             modify_filebrowser_config
+            ;;
+        3)
+            modify_sub_urls
             ;;
         *)
             echo -e "${red}无效的选项${reset}"
