@@ -2610,6 +2610,9 @@ main() {
     esac
 
 }
+# 先加载env文件（用于读取auto_update_project配置）
+[ -f /mssb/mssb.env ] && source /mssb/mssb.env
+
 # 版本提示
 echo -e "${yellow}=================================================${reset}"
 echo -e "${yellow}⚠️ 重要提示：${reset}"
@@ -2620,6 +2623,6 @@ echo -e "${yellow}=================================================${reset}"
 if [ "${auto_update_project:-y}" = "y" ]; then
     update_project
 else
-    echo -e "${yellow}自动更新已关闭，跳过项目更新（选顩17可开启）${reset}"
+    echo -e "${yellow}自动更新已关闭，跳过项目更新（选项17可开启）${reset}"
 fi
 main
