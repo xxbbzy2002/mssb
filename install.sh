@@ -2073,6 +2073,27 @@ remove_autostart_lxc() {
     echo -e "${green_text}✅ 开机自启动已移除${reset}"
 }
 
+# 切换脚本自动更新开关
+toggle_auto_update() {
+    local env_file="/mssb/mssb.env"
+    if [ "$auto_update_project" = "y" ]; then
+        auto_update_project="n"
+        echo -e "${yellow}已关闭脚本启动时自动更新项目${reset}"
+    else
+        auto_update_project="y"
+        echo -e "${green_text}已开启脚本启动时自动更新项目${reset}"
+    fi
+    # 更新env文件
+    if [ -f "$env_file" ]; then
+        if grep -q "^auto_update_project=" "$env_file"; then
+            sed -i "s/^auto_update_project=.*/auto_update_project=$auto_update_project/" "$env_file"
+        else
+            echo "auto_update_project=$auto_update_project" >> "$env_file"
+        fi
+    fi
+    echo -e "当前设置: auto_update_project=${green_text}$auto_update_project${reset}"
+}
+
 # 显示服务信息
 display_service_info() {
     echo -e "${green_text}-------------------------------------------------${reset}"
@@ -2386,6 +2407,8 @@ dns_after_install=$dns_after_install
 dns_after_uninstall=$dns_after_uninstall
 # 用来替换mihomo配置文件里icon的请求，默认为空，提示页面可以安装https://github.com/baozaodetudou/icons进行本地化访问
 icon_header=$icon_header
+# 脚本启动时是否自动更新项目（y/n）
+auto_update_project=${auto_update_project:-y}
 EOF
     source "$env_file"
 }
@@ -2444,8 +2467,9 @@ main() {
     echo -e "${green_text}14) 检查CPU指令集和v3支持${reset}"
     echo -e "${green_text}15) 配置PVE LXC开机自启动（自动执行选项4）${reset}"
     echo -e "${red}16) 移除开机自启动配置${reset}"
+    echo -e "${green_text}17) 切换脚本启动自动更新开关 (当前: ${auto_update_project:-y})${reset}"
     echo -e "${green_text}-------------------------------------------------${reset}"
-    read -p "请输入选项 (1-16/00): " main_choice
+    read -p "请输入选项 (1-17/00): " main_choice
 
     case "$main_choice" in
         2)
@@ -2557,6 +2581,12 @@ main() {
             read -n 1
             main
             ;;
+        17)
+            toggle_auto_update
+            echo -e "\n${yellow}(按键 Ctrl + C 终止运行脚本, 键入任意值返回主菜单)${reset}"
+            read -n 1
+            main
+            ;;
         00)
             echo -e "${green_text}退出程序${reset}"
             exit 0
@@ -2586,5 +2616,10 @@ echo -e "${yellow}⚠️ 重要提示：${reset}"
 echo -e "${yellow}2025.6.23 之前的是 v1 版本，现在是 v2 版本。${reset}"
 echo -e "${yellow}如果你当前使用的是 v1 版本，建议使用3先停止并删除/mssb文件后重新安装本脚本。${reset}"
 echo -e "${yellow}=================================================${reset}"
-update_project
+# 根据配置决定是否自动更新项目
+if [ "${auto_update_project:-y}" = "y" ]; then
+    update_project
+else
+    echo -e "${yellow}自动更新已关闭，跳过项目更新（选顩17可开启）${reset}"
+fi
 main
