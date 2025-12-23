@@ -2034,6 +2034,45 @@ update_cores_menu() {
     echo -e "${green_text}✅ 更新操作完成${reset}"
 }
 
+# 设置PVE LXC容器开机自启动（精简版，调用选项4功能）
+setup_autostart_lxc() {
+    echo -e "\n${green_text}=== PVE LXC 开机自启动配置 ===${reset}"
+    
+    local script_dir="$(cd "$(dirname "$0")" && pwd)"
+    local service_file="/etc/systemd/system/mssb-autostart.service"
+
+    # 创建 systemd 服务，直接调用 start_all_services 逻辑
+    cat > "$service_file" <<EOF
+[Unit]
+Description=MSSB Auto Start Service for PVE LXC
+After=network.target supervisor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'source /mssb/mssb.env 2>/dev/null; nft -f /etc/nftables.conf 2>/dev/null; systemctl start sing-box-router mihomo-router 2>/dev/null; supervisorctl start all 2>/dev/null; [ -n "\$dns_after_install" ] && echo "nameserver \$dns_after_install" > /etc/resolv.conf'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    if systemctl enable mssb-autostart.service; then
+        echo -e "${green_text}✅ 开机自启动已配置${reset}"
+        echo -e "${yellow}管理命令: systemctl status/disable mssb-autostart${reset}"
+    else
+        echo -e "${red}❌ 配置失败${reset}"
+    fi
+}
+
+# 移除开机自启动
+remove_autostart_lxc() {
+    systemctl disable mssb-autostart 2>/dev/null
+    rm -f /etc/systemd/system/mssb-autostart.service
+    systemctl daemon-reload
+    echo -e "${green_text}✅ 开机自启动已移除${reset}"
+}
+
 # 显示服务信息
 display_service_info() {
     echo -e "${green_text}-------------------------------------------------${reset}"
@@ -2403,8 +2442,10 @@ main() {
     echo -e "${green_text}12) 更新项目${reset}"
     echo -e "${green_text}13) 更新内核版本(mosdns/singbox/mihomo)${reset}"
     echo -e "${green_text}14) 检查CPU指令集和v3支持${reset}"
+    echo -e "${green_text}15) 配置PVE LXC开机自启动（自动执行选项4）${reset}"
+    echo -e "${red}16) 移除开机自启动配置${reset}"
     echo -e "${green_text}-------------------------------------------------${reset}"
-    read -p "请输入选项 (1/2/3/4/5/6/7/8/9/10/11/12/13/14/00): " main_choice
+    read -p "请输入选项 (1-16/00): " main_choice
 
     case "$main_choice" in
         2)
@@ -2500,6 +2541,18 @@ main() {
         14)
             echo -e "${green_text}检查CPU指令集和v3支持${reset}"
             check_cpu_instructions
+            echo -e "\n${yellow}(按键 Ctrl + C 终止运行脚本, 键入任意值返回主菜单)${reset}"
+            read -n 1
+            main
+            ;;
+        15)
+            setup_autostart_lxc
+            echo -e "\n${yellow}(按键 Ctrl + C 终止运行脚本, 键入任意值返回主菜单)${reset}"
+            read -n 1
+            main
+            ;;
+        16)
+            remove_autostart_lxc
             echo -e "\n${yellow}(按键 Ctrl + C 终止运行脚本, 键入任意值返回主菜单)${reset}"
             read -n 1
             main
